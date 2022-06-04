@@ -32,6 +32,7 @@ import os
 import numpy as np
 import logging
 import sys
+from pathlib import Path
 
 #logging.basicConfig(level="DEBUG", stream=sys.stdout)
 
@@ -41,17 +42,28 @@ from tvm.contrib.download import download_testdata
 from tvm.contrib import graph_executor, utils
 from tvm import relay
 
+DIR = Path(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+ETISS_DIR = os.environ.get("ETISS_DIR", None)
+assert ETISS_DIR, "Missing environment variable: ETISS_DIR"
+RISCV_DIR = os.environ.get("RISCV_DIR", None)
+assert RISCV_DIR, "Missing environment variable: RISCV_DIR"
+# ETISSVP_SCRIPT = os.environ.get("ETISSVP_SCRIPT", str(DIR / "template_project" / "scripts" / "run.sh"))
+ETISSVP_SCRIPT = os.environ.get("ETISSVP_SCRIPT", str(Path(ETISS_DIR) / "bin" / "run_helper.sh"))
+assert ETISSVP_SCRIPT, "Missing environment variable: ETISSVP_SCRIPT"
+ETISSVP_INI = os.environ.get("ETISSVP_INI", str(DIR / "template_project" / "scripts" / "memsegs.ini"))
+assert ETISSVP_INI, "Missing environment variable: ETISSVP_INI"
+
 project_options = {
     "project_type": "host_driven",
-    "verbose": False,
-    "debug": False,
+    # "verbose": False,
+    "verbose": True,
+    # "debug": False,
+    "debug": True,
     "transport": True,
-    "etiss_path": "/work/git/prj/etiss_freertos/etiss-public-fork/build/installed/",
-    "riscv_path": "/usr/local/research/projects/SystemDesign/tools/riscv/current/",
-    "etissvp_script": tvm.micro.get_microtvm_template_projects("etissvp") + "/scripts/run.sh",
-    #"etissvp_script_args": "-i" + tvm.micro.get_microtvm_template_projects("etissvp") + "/scripts/memsegs.ini v"
-    #"etissvp_script_args": "v gdb tgdb noattach",
-    "etissvp_script_args": "v"
+    "etiss_path": ETISS_DIR,
+    "riscv_path": RISCV_DIR,
+    "etissvp_script": ETISSVP_SCRIPT,
+    "etissvp_script_args": "plic clint uart v" + (" -i" + ETISSVP_INI if ETISSVP_INI else "")
 }
 
 model_url = "https://people.linaro.org/~tom.gall/sine_model.tflite"
@@ -101,6 +113,7 @@ mod, params = relay.frontend.from_tflite(
 
 # Compiling for virtual hardware
 TARGET = tvm.target.target.micro("host")
+RUNTIME = tvm.relay.backend.Runtime("crt", {"system-lib": True})
 BOARD = "bare_etiss_processor"
 
 ######################################################################
@@ -109,7 +122,8 @@ BOARD = "bare_etiss_processor"
 with tvm.transform.PassContext(
     opt_level=3, config={"tir.disable_vectorize": True}, disabled_pass=["AlterOpLayout"]
 ):
-    module = relay.build(mod, target=TARGET, params=params)
+    module = relay.build(mod, target=TARGET, runtime=RUNTIME, params=params)
+    print("module", module)
 
 
 # Inspecting the compilation output

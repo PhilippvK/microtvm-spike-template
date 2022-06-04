@@ -27,9 +27,10 @@ Autotuning with micro TVM
 This tutorial explains how to autotune a model using the C runtime.
 """
 
+import os
 import numpy as np
 import subprocess
-import pathlib
+from pathlib import Path
 
 import tvm
 
@@ -37,17 +38,29 @@ import logging
 import sys
 logging.basicConfig(level="WARNING", stream=sys.stdout)
 
+DIR = Path(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+ETISS_DIR = os.environ.get("ETISS_DIR", None)
+assert ETISS_DIR, "Missing environment variable: ETISS_DIR"
+RISCV_DIR = os.environ.get("RISCV_DIR", None)
+assert RISCV_DIR, "Missing environment variable: RISCV_DIR"
+# ETISSVP_SCRIPT = os.environ.get("ETISSVP_SCRIPT", str(DIR / "template_project" / "scripts" / "run.sh"))
+ETISSVP_SCRIPT = os.environ.get("ETISSVP_SCRIPT", str(Path(ETISS_DIR) / "bin" / "run_helper.sh"))
+assert ETISSVP_SCRIPT, "Missing environment variable: ETISSVP_SCRIPT"
+ETISSVP_INI = os.environ.get("ETISSVP_INI", str(DIR / "template_project" / "scripts" / "memsegs.ini"))
+assert ETISSVP_INI, "Missing environment variable: ETISSVP_INI"
+
 
 project_options = {
     "project_type": "host_driven",
-    "verbose": False,
-    "debug": False,
+    # "verbose": False,
+    "verbose": True,
+    # "debug": False,
+    "debug": True,
     "transport": True,
-    #"etiss_path": "/work/git/prj/etiss_clint_uart/ml_on_mcu/deps/install/etiss/etiss_default/",
-    "etiss_path": "/work/git/prj/etiss_freertos/etiss-public-fork/build/installed",
-    "riscv_path": "/usr/local/research/projects/SystemDesign/tools/riscv/current/",
-    "etissvp_script": tvm.micro.get_microtvm_template_projects("etissvp") + "/scripts/run.sh",
-    "etissvp_script_args": "-i" + tvm.micro.get_microtvm_template_projects("etissvp") + "/scripts/memsegs.ini v"
+    "etiss_path": ETISS_DIR,
+    "riscv_path": RISCV_DIR,
+    "etissvp_script": ETISSVP_SCRIPT,
+    "etissvp_script_args": "plic clint uart v" + (" -i" + ETISSVP_INI if ETISSVP_INI else "")
 }
 
 ####################
@@ -85,6 +98,7 @@ params = {"weight": weight_sample}
 # Compiling for virtual hardware
 # --------------------------------------------------------------------------
 TARGET = tvm.target.target.micro("host")
+RUNTIME = tvm.relay.backend.Runtime("crt", {"system-lib": True})
 #TARGET = tvm.target.target.riscv_cpu("bare_etiss_processor")
 BOARD = "bare_etiss_processor"
 
@@ -104,7 +118,7 @@ assert len(tasks) > 0
 # Compiling for virtual hardware
 # --------------------------------------------------------------------------
 module_loader = tvm.micro.AutoTvmModuleLoader(
-    template_project_dir=pathlib.Path(tvm.micro.get_microtvm_template_projects("etissvp")),
+    template_project_dir=Path(str(DIR / "template_project")),
     project_options=project_options,
 )
 builder = tvm.autotvm.LocalBuilder(
@@ -112,6 +126,7 @@ builder = tvm.autotvm.LocalBuilder(
     build_kwargs={"build_option": {"tir.disable_vectorize": True}},
     do_fork=False,
     build_func=tvm.micro.autotvm_build_func,
+    runtime=RUNTIME,
 )
 runner = tvm.autotvm.LocalRunner(number=1, repeat=1, timeout=100, module_loader=module_loader)
 
@@ -139,14 +154,14 @@ for i, task in enumerate(tasks):
 # Timing the untuned program
 ############################
 with pass_context:
-    lowered = tvm.relay.build(relay_mod, target=TARGET, params=params)
+    lowered = tvm.relay.build(relay_mod, target=TARGET, runtime=RUNTIME, params=params)
 
 temp_dir = tvm.contrib.utils.tempdir()
 
 # Compiling for virtual hardware
 # --------------------------------------------------------------------------
 project = tvm.micro.generate_project(
-    tvm.micro.get_microtvm_template_projects("etissvp"),
+    str(DIR / "template_project"),
     lowered,
     temp_dir / "project",
     project_options,
@@ -172,14 +187,14 @@ with tvm.micro.Session(project.transport()) as session:
 
 with tvm.autotvm.apply_history_best("microtvm_autotune.log.txt"):
     with pass_context:
-        lowered_tuned = tvm.relay.build(relay_mod, target=TARGET, params=params)
+        lowered_tuned = tvm.relay.build(relay_mod, target=TARGET, runtime=RUNTIME, params=params)
 
 temp_dir = tvm.contrib.utils.tempdir()
 
 # Compiling for virtual hardware
 # --------------------------------------------------------------------------
 project = tvm.micro.generate_project(
-    tvm.micro.get_microtvm_template_projects("etissvp"),
+    str(DIR / "template_project"),
     lowered_tuned,
     temp_dir / "project",
     project_options,
