@@ -125,32 +125,44 @@ if IS_TEMPLATE:
 PROJECT_OPTIONS = [
     server.ProjectOption(
         "extra_files_tar",
+        optional=["generate_project"],
+        type="str",
         help="If given, during generate_project, uncompress the tarball at this path into the project dir.",
     ),
     server.ProjectOption(
         "etiss_path",
+        optional=["open_transport"],
+        type="str",
         help="Path to the installed ETISS directory.",
     ),
     server.ProjectOption(
         "riscv_path",
+        optional=["build"],
+        type="str",
         help="Path to the installed RISCV GCC directory.",
     ),
     server.ProjectOption(
         "etissvp_script",
+        optional=["open_transport"],
+        type="str",
         help="Path to script which sets up the environment and starts running the provided target software binary on the vp.",
     ),
     server.ProjectOption(
         "etissvp_script_args",
+        optional=["open_transport"],
+        type="str",
         help="Additional arguments to etissvp_script.",
     ),
     server.ProjectOption(
         "project_type",
-        help="Type of project to generate.",
         choices=tuple(PROJECT_TYPES),
+        required=["generate_project"],
+        type="str",
+        help="Type of project to generate.",
     ),
-    server.ProjectOption("verbose", help="Run build with verbose output.", choices=(True, False)),
-    server.ProjectOption("debug", help="Run build in DEBUG mode.", choices=(True, False)),
-    server.ProjectOption("transport", help="Run build in DEBUG mode.", choices=(True, False)),
+    server.ProjectOption("verbose", optional=["build"], type="bool", help="Run build with verbose output."),
+    server.ProjectOption("debug", optional=["build"], type="bool", help="Run build in DEBUG mode."),
+    server.ProjectOption("transport", optional=["open_transport"], type="bool", help="Skip flashing."),
 ]
 
 
