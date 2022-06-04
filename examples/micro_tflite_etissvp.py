@@ -165,7 +165,7 @@ import tvm.contrib.utils
 temp_dir = tvm.contrib.utils.tempdir()
 generated_project_dir = temp_dir / "generated-project"
 generated_project = tvm.micro.generate_project(
-    tvm.micro.get_microtvm_template_projects("etissvp"), module, generated_project_dir, project_options
+    str(DIR / "template_project"), module, generated_project_dir, project_options
 )
 
 # Build and flash the project
@@ -173,7 +173,6 @@ generated_project.build()
 generated_project.flash()
 
 with tvm.micro.Session(transport_context_manager=generated_project.transport()) as session:
-    pass
     graph_mod = tvm.micro.create_local_graph_executor(
         module.get_graph_json(), session.get_system_lib(), session.device
     )
