@@ -131,7 +131,7 @@ PROJECT_OPTIONS = [
     ),
     server.ProjectOption(
         "etiss_path",
-        optional=["open_transport"],
+        optional=["build", "open_transport"],
         type="str",
         help="Path to the installed ETISS directory.",
     ),
