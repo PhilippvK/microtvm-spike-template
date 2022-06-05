@@ -264,6 +264,7 @@ class Handler(server.ProjectAPIHandler):
 
         if options.get("riscv_path"):
             cmake_args.append("-DRISCV_ELF_GCC_PREFIX=" + options["riscv_path"])
+            cmake_args.append("-DRISCV_ELF_GCC_BASENAME=riscv32-unknown-elf")  # TODO
         else:
             raise RuntimeError("Project Config 'riscv_path' undefined!")
 

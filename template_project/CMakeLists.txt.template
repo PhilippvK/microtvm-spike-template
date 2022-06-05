@@ -25,7 +25,6 @@ SET(ENABLE_LTO OFF CACHE BOOL "Whether to enable link-time optimization")
 
 SET(PULPINO_TC_DIR ${ETISS_DIR}/examples/SW/riscv/cmake)
 
-SET(RISCV_ELF_GCC_BASENAME "riscv32-unknown-elf")
 SET(CMAKE_TOOLCHAIN_FILE "${PULPINO_TC_DIR}/pulpino_tumeda/toolchain.cmake")
 
 ##find_package(Zephyr HINTS $ENV{ZEPHYR_BASE})
