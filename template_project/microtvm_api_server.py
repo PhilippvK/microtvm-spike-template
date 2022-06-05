@@ -143,14 +143,16 @@ PROJECT_OPTIONS = [
     ),
     server.ProjectOption(
         "etissvp_script",
-        optional=["open_transport"],
+        optional=["flash", "open_transport"],
         type="str",
+        default="???",
         help="Path to script which sets up the environment and starts running the provided target software binary on the vp.",
     ),
     server.ProjectOption(
         "etissvp_script_args",
-        optional=["open_transport"],
+        optional=["flash", "open_transport"],
         type="str",
+        default="???",
         help="Additional arguments to etissvp_script.",
     ),
     server.ProjectOption(
@@ -162,7 +164,7 @@ PROJECT_OPTIONS = [
     ),
     server.ProjectOption("verbose", optional=["build"], type="bool", help="Run build with verbose output."),
     server.ProjectOption("debug", optional=["build"], type="bool", help="Run build in DEBUG mode."),
-    server.ProjectOption("transport", optional=["open_transport"], type="bool", help="Skip flashing."),
+    server.ProjectOption("transport", optional=["flash"], type="bool", help="Skip flashing."),
 ]
 
 
