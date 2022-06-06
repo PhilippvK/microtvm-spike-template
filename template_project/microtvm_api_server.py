@@ -356,11 +356,13 @@ class ETISSVPTransport:
     def open(self):
         #self.pipe_dir = pathlib.Path(tempfile.mkdtemp())
         self.pipe_dir = pathlib.Path(os.path.join(BUILD_DIR, ".tmp"))
+        if os.path.isdir(self.pipe_dir):
+            shutil.rmtree(self.pipe_dir)
         os.mkdir(self.pipe_dir)
         self.write_pipe = self.pipe_dir / "uartdevicefifoin"
         self.write_pipe2 = self.pipe_dir / "uartdevicefifoin2"
         self.read_pipe = self.pipe_dir / "uartdevicefifoout"
-        
+ 
         #os.mkfifo(self.read_pipe)
 
         #print("RUN", BUILD_DIR)
