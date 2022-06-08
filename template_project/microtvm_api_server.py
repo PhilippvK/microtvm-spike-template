@@ -188,9 +188,10 @@ class Handler(server.ProjectAPIHandler):
 
     API_SERVER_CRT_LIBS_TOKEN = "<API_SERVER_CRT_LIBS>"
 
+    # Common needs to be first in the list as other libs depend on it
     CRT_LIBS_BY_PROJECT_TYPE = {
-        "host_driven": "microtvm_rpc_server microtvm_rpc_common common",
-        "aot_demo": "memory microtvm_rpc_common common",
+        "host_driven": "common microtvm_rpc_server microtvm_rpc_common graph_executor graph_executor_module",
+        "aot_demo": "common memory microtvm_rpc_common",
     }
 
     def generate_project(self, model_library_format_path, standalone_crt_dir, project_dir, options):
