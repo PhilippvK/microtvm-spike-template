@@ -52,10 +52,8 @@ assert ETISSVP_INI, "Missing environment variable: ETISSVP_INI"
 
 project_options = {
     "project_type": "host_driven",
-    # "verbose": False,
-    "verbose": True,
-    # "debug": False,
-    "debug": True,
+    "verbose": False,
+    "debug": False,
     "transport": True,
     "etiss_path": ETISS_DIR,
     "riscv_path": RISCV_DIR,
