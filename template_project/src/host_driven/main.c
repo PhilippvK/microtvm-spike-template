@@ -37,6 +37,7 @@
 //#include <random/rand32.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <string.h>
 //#include <sys/printk.h>
 //#include <sys/ring_buffer.h>
 #include <tvm/runtime/crt/logging.h>
