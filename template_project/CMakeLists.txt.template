@@ -64,7 +64,6 @@ set(CRT_LIBS <API_SERVER_CRT_LIBS>)
 set(CRT_LIB_BASE crt/src/runtime/crt)
 
 list(FIND CRT_LIBS "common" COMMON_IDX)
-message(STATUS "COMMON_IDX=${COMMON_IDX}")
 if(${COMMON_IDX} GREATER 0)
     message(FATAL_ERROR "The 'common' library needs to be at the first position of the CRT_LIBS list")
 endif()
