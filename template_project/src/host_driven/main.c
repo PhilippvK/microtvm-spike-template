@@ -42,6 +42,7 @@
 //#include <sys/ring_buffer.h>
 #include <tvm/runtime/crt/logging.h>
 #include <tvm/runtime/crt/microtvm_rpc_server.h>
+#include <tvm/runtime/crt/graph_executor_module.h>
 #include <unistd.h>
 //#include <zephyr.h>
 #include "uart.h"
@@ -542,12 +543,14 @@ void main(void) {
   clint_cfg_timecompare_us(systemtimer_us);
   // Initialize microTVM RPC server, which will receive commands from the UART and execute them.
   microtvm_rpc_server_t server = MicroTVMRpcServerInit(write_serial, NULL);
-  //TVMLogf("microTVM ETISSVP runtime - running");
+  CHECK_EQ(TVMGraphExecutorModule_Register(), kTvmErrorNoError,
+           "failed to register GraphExecutor TVMModule");
+  TVMLogf("microTVM ETISSVP runtime - running");
 
   // The main application loop. We continuously read commands from the UART
   // and dispatch them to MicroTVMRpcServerLoop().
   while (true) {
-    
+
     /*//printf("LOOP\n");
     int x = 0, y = 1;
     //while (x < 100000) {
