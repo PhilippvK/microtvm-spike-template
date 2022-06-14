@@ -91,6 +91,7 @@ endforeach(crt_lib_name ${CRT_LIBS})
 
 # define a library for the model sources.
 ##zephyr_library_named(tvm_model)
+target_link_libraries(graph_executor_module PRIVATE graph_executor)
 target_link_libraries(app PRIVATE tvm_model)
 
 file(GLOB_RECURSE app_srcs src/**.c)
