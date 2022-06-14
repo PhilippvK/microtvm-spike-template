@@ -22,29 +22,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/*
- * This is a sample Zephyr-based application that contains the logic
- * needed to control a microTVM-based model via the UART. This is only
- * intended to be a demonstration, since typically you will want to incorporate
- * this logic into your own application.
- */
-
-//#include <drivers/gpio.h>
-//#include <drivers/uart.h>
-//#include <fatal.h>
-//#include <kernel.h>
-//#include <power/reboot.h>
-//#include <random/rand32.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
-//#include <sys/printk.h>
-//#include <sys/ring_buffer.h>
 #include <tvm/runtime/crt/logging.h>
 #include <tvm/runtime/crt/microtvm_rpc_server.h>
 #include <tvm/runtime/crt/graph_executor_module.h>
 #include <unistd.h>
-//#include <zephyr.h>
 #include "uart.h"
 #include "int.h"
 
@@ -54,19 +38,6 @@
 
 //#define IRQ_DEBUG
 
-/* For getting core ID. */
-static inline int get_core_id()
-{
-  return 0;
-}
-
-// get number of cores
-static inline int get_core_num()
-{
-  return 0;
-}
-
-//#ifdef __riscv__
 /**
  * @brief Write to CSR.
  * @param CSR register to write.
@@ -88,30 +59,12 @@ static inline int get_core_num()
  */
 #define csrr(csr, value)  asm volatile ("csrr\t\t%0, " #csr "": "=r" (value));
 
-/**
- * @brief Request to put the core to sleep.
- * @param void
- *
- * Set the core to sleep state and wait for events/interrupt to wake up.
- *
- */
-/*static inline void sleep(void) {
-#ifdef SCR
-    SCR = 0x01;
-#endif
-  asm volatile ("nop;nop;wfi");
-}*/
-
 /* Loops/exits simulation */
 void exit(int i);
-
-/* end of computation */
-void eoc(int i);
 
 // sleep some cycles
 void sleep_busy(volatile int);
 
-//#include "cust_print.h"
 #define MSTATUS_UIE 0x00000001
 #define MSTATUS_SIE 0x00000002
 #define MSTATUS_HIE 0x00000004
@@ -265,7 +218,6 @@ void sleep_busy(volatile int);
 #define CAUSE_STORE_PAGE_FAULT 0xf
 
 //#include "uart_drv.h"
-//#include "aes_ha_drv.h"
 
 //#define ETISSVP_LOGGER_ADDR 0xf0000000
 //#define ETISSVP_LOGGER ((volatile char*)ETISSVP_LOGGER_ADDR)
@@ -274,12 +226,6 @@ void sleep_busy(volatile int);
 #define CLINT_BASE_ADDR               (0x02000000) //<< CLINT
 
 /** Registers and pointers */
-//#define REGP(x) ((volatile unsigned int*)(x))
-//#define REG(x) (*((volatile unsigned int*)(x)))
-//#define REGP_8(x) (((volatile uint8_t*)(x)))
-
-//#include "utils.h"
-//#include "stdint.h"
 
 #define CLINT_MTIMECMPLO_OFFSET    0x4000
 #define CLINT_MTIMECMPHI_OFFSET    (0x4000 + 4)
@@ -619,36 +565,8 @@ void main(void) {
       //int_enable();
     }
     //lock = 0;
-    
-    
-    //unsigned int key = irq_lock();
-    //uint32_t bytes_read = ring_buf_get_claim(&uart_rx_rbuf, &data, RING_BUF_SIZE_BYTES);
-    /*if (bytes_read > 0) {
-      g_num_bytes_in_rx_buffer -= bytes_read;
-      size_t bytes_remaining = bytes_read;
-      while (bytes_remaining > 0) {
-        // Pass the received bytes to the RPC server.
-        tvm_crt_error_t err = MicroTVMRpcServerLoop(server, &data, &bytes_remaining);
-        if (err != kTvmErrorNoError && err != kTvmErrorFramingShortPacket) {
-          TVMPlatformAbort(err);
-        }
-        if (g_num_bytes_written != 0 || g_num_bytes_requested != 0) {
-          if (g_num_bytes_written != g_num_bytes_requested) {
-            TVMPlatformAbort((tvm_crt_error_t)0xbeef5);
-          }
-          g_num_bytes_written = 0;
-          g_num_bytes_requested = 0;
-        }
-      }
-      int err = ring_buf_get_finish(&uart_rx_rbuf, bytes_read);
-      if (err != 0) {
-        TVMPlatformAbort((tvm_crt_error_t)0xbeef6);
-      }
-    }*/
-    //irq_unlock(key);
-    //break;
   }
-  //TVMLogf("microTVM ETISSVP runtime - done");
-  //for (;;) {}
+
+  TVMLogf("microTVM ETISSVP runtime - done");
 
 }
