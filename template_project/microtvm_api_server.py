@@ -190,7 +190,7 @@ class Handler(server.ProjectAPIHandler):
 
     # Common needs to be first in the list as other libs depend on it
     CRT_LIBS_BY_PROJECT_TYPE = {
-        "host_driven": "common microtvm_rpc_server microtvm_rpc_common graph_executor graph_executor_module",
+        "host_driven": "common microtvm_rpc_server microtvm_rpc_common graph_executor graph_executor_module aot_executor aot_executor_module",
         "aot_demo": "common memory microtvm_rpc_common",
     }
 
@@ -363,7 +363,7 @@ class ETISSVPTransport:
         self.write_pipe = self.pipe_dir / "uartdevicefifoin"
         # self.write_pipe2 = self.pipe_dir / "uartdevicefifoin2"
         self.read_pipe = self.pipe_dir / "uartdevicefifoout"
- 
+
         #os.mkfifo(self.read_pipe)
 
         #print("RUN", BUILD_DIR)
