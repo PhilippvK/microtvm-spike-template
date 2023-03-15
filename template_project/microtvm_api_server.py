@@ -15,189 +15,162 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import atexit
-import collections
-import collections.abc
-import enum
 import fcntl
-import logging
+import multiprocessing
 import os
+import sys
+import shlex
 import os.path
 import pathlib
-import queue
-import re
 import select
-import shlex
 import shutil
+import logging
 import subprocess
-import sys
 import tarfile
-import tempfile
-import threading
 import time
-import json
-import signal
-
-import yaml
+import re
 
 from tvm.micro.project_api import server
 
-
 _LOG = logging.getLogger(__name__)
+_LOG.setLevel(logging.WARNING)
 
 
-API_SERVER_DIR = pathlib.Path(os.path.dirname(__file__) or os.path.getcwd())
-
-
-BUILD_DIR = API_SERVER_DIR / "build"
+PROJECT_DIR = pathlib.Path(os.path.dirname(__file__) or os.path.getcwd())
 
 
 MODEL_LIBRARY_FORMAT_RELPATH = "model.tar"
 
 
-IS_TEMPLATE = not (API_SERVER_DIR / MODEL_LIBRARY_FORMAT_RELPATH).exists()
+IS_TEMPLATE = not os.path.exists(os.path.join(PROJECT_DIR, MODEL_LIBRARY_FORMAT_RELPATH))
+
+# Used this size to pass most CRT tests in TVM.
+# WORKSPACE_SIZE_BYTES = 2 * 1024 * 1024
+WORKSPACE_SIZE_BYTES = 1 * 1024 * 1024
+
+CMAKEFILE_FILENAME = "CMakeLists.txt"
+
+# The build target given to make
+BUILD_TARGET = "build/main"
+
+ARCH = "rv32gc"
+ABI = "ilp32d"
+TRIPLE = "riscv32-unknown-elf"
+NPROC = multiprocessing.cpu_count()
 
 def check_call(cmd_args, *args, **kwargs):
     cwd_str = "" if "cwd" not in kwargs else f" (in cwd: {kwargs['cwd']})"
-    _LOG.debug("run%s: %s", cwd_str, " ".join(shlex.quote(a) for a in cmd_args))
+    _LOG.info("run%s: %s", cwd_str, " ".join(shlex.quote(a) for a in cmd_args))
     return subprocess.check_call(cmd_args, *args, **kwargs)
 
 
-CACHE_ENTRY_RE = re.compile(r"(?P<name>[^:]+):(?P<type>[^=]+)=(?P<value>.*)")
-
-
-CMAKE_BOOL_MAP = dict(
-    [(k, True) for k in ("1", "ON", "YES", "TRUE", "Y")]
-    + [(k, False) for k in ("0", "OFF", "NO", "FALSE", "N", "IGNORE", "NOTFOUND", "")]
-)
-
-
-class CMakeCache(collections.abc.Mapping):
-    def __init__(self, path):
-        self._path = path
-        self._dict = None
-
-    def __iter__(self):
-        return iter(self._dict)
-
-    def __getitem__(self, key):
-        if self._dict is None:
-            self._dict = self._read_cmake_cache()
-
-        return self._dict[key]
-
-    def __len__(self):
-        return len(self._dict)
-
-    def _read_cmake_cache(self):
-        """Read a CMakeCache.txt-like file and return a dictionary of values."""
-        entries = collections.OrderedDict()
-        with open(self._path, encoding="utf-8") as f:
-            for line in f:
-                m = CACHE_ENTRY_RE.match(line.rstrip("\n"))
-                if not m:
-                    continue
-
-                if m.group("type") == "BOOL":
-                    value = CMAKE_BOOL_MAP[m.group("value").upper()]
-                else:
-                    value = m.group("value")
-
-                entries[m.group("name")] = value
-
-        return entries
-
-
-CMAKE_CACHE = CMakeCache(BUILD_DIR / "CMakeCache.txt")
-
-
-class BoardError(Exception):
-    """Raised when an attached board cannot be opened (i.e. missing /dev nodes, etc)."""
-
-
-PROJECT_TYPES = []
-if IS_TEMPLATE:
-    for d in (API_SERVER_DIR / "src").iterdir():
-        if d.is_dir():
-            PROJECT_TYPES.append(d.name)
-
-
-PROJECT_OPTIONS = [
-    server.ProjectOption(
-        "extra_files_tar",
-        optional=["generate_project"],
-        type="str",
-        help="If given, during generate_project, uncompress the tarball at this path into the project dir.",
-    ),
-    server.ProjectOption(
-        "etiss_path",
-        optional=["build", "flash", "open_transport"],
-        type="str",
-        help="Path to the installed ETISS directory.",
-    ),
-    server.ProjectOption(
-        "riscv_path",
-        optional=["build"],
-        type="str",
-        help="Path to the installed RISCV GCC directory.",
-    ),
-    server.ProjectOption(
-        "etissvp_script",
-        optional=["flash", "open_transport"],
-        type="str",
-        default="???",
-        help="Path to script which sets up the environment and starts running the provided target software binary on the vp.",
-    ),
-    server.ProjectOption(
-        "etissvp_script_args",
-        optional=["flash", "open_transport"],
-        type="str",
-        default="???",
-        help="Additional arguments to etissvp_script.",
-    ),
-    server.ProjectOption(
-        "project_type",
-        choices=tuple(PROJECT_TYPES),
-        required=["generate_project"],
-        type="str",
-        help="Type of project to generate.",
-    ),
-    server.ProjectOption("verbose", optional=["build"], type="bool", help="Run build with verbose output."),
-    server.ProjectOption("debug", optional=["build"], type="bool", help="Run build in DEBUG mode."),
-    server.ProjectOption("transport", optional=["flash"], type="bool", help="Skip flashing."),
-]
-
-
 class Handler(server.ProjectAPIHandler):
+    BUILD_TARGET = "build/main"
+
     def __init__(self):
         super(Handler, self).__init__()
         self._proc = None
 
     def server_info_query(self, tvm_version):
         return server.ServerInfo(
-            platform_name="etissvp",
+            platform_name="host",
             is_template=IS_TEMPLATE,
             model_library_format_path=""
             if IS_TEMPLATE
-            else (API_SERVER_DIR / MODEL_LIBRARY_FORMAT_RELPATH),
-            project_options=PROJECT_OPTIONS,
+            else PROJECT_DIR / MODEL_LIBRARY_FORMAT_RELPATH,
+            project_options=[
+                server.ProjectOption(
+                    "verbose",
+                    optional=["build"],
+                    type="bool",
+                    default=False,
+                    help="Run make with verbose output",
+                ),
+                server.ProjectOption(
+                    "quiet",
+                    optional=["build"],
+                    type="bool",
+                    default=False,
+                    help="Supress all compilation messages",
+                ),
+                server.ProjectOption(
+                    "workspace_size_bytes",
+                    optional=["generate_project"],
+                    type="int",
+                    default=WORKSPACE_SIZE_BYTES,
+                    help="Sets the value of TVM_WORKSPACE_SIZE_BYTES.",
+                ),
+                server.ProjectOption(
+                    "arch",
+                    optional=["build"],
+                    default=ARCH,
+                    type="str",
+                    help="Name used ARCH.",
+                ),
+                server.ProjectOption(
+                    "abi",
+                    optional=["build"],
+                    default=ABI,
+                    type="str",
+                    help="Name used ABI.",
+                ),
+                server.ProjectOption(
+                    "gcc_prefix",
+                    optional=["build"],
+                    default="",
+                    type="str",
+                    help="Name used COMPILER.",
+                ),
+                server.ProjectOption(
+                    "gcc_name",
+                    optional=["build"],
+                    default=TRIPLE,
+                    type="str",
+                    help="Name used COMPILER.",
+                ),
+                server.ProjectOption(
+                    "etiss_args",
+                    optional=["open_transport"],
+                    default="",
+                    type="str",
+                    help="TODO.",
+                ),
+                server.ProjectOption(
+                    "etiss_script",
+                    required=["open_transport"],
+                    type="str",
+                    help="Path to run_helper.sh script.",
+                ),
+            ],
         )
 
     # These files and directories will be recursively copied into generated projects from the CRT.
-    CRT_COPY_ITEMS = ("include", "Makefile", "src")
+    CRT_COPY_ITEMS = ("include", "CMakeLists.txt", "src")
 
-    API_SERVER_CRT_LIBS_TOKEN = "<API_SERVER_CRT_LIBS>"
+    def _populate_cmake(
+        self,
+        cmakefile_template_path: pathlib.Path,
+        cmakefile_path: pathlib.Path,
+        memory_size: int,
+        verbose: bool,
+    ):
+        """Generate CMakeList file from template."""
 
-    # Common needs to be first in the list as other libs depend on it
-    CRT_LIBS_BY_PROJECT_TYPE = {
-        "host_driven": "common microtvm_rpc_server microtvm_rpc_common graph_executor graph_executor_module aot_executor aot_executor_module",
-        "aot_demo": "common memory microtvm_rpc_common",
-    }
+        regex = re.compile(r"([A-Z_]+) := (<[A-Z_]+>)")
+        with open(cmakefile_path, "w") as cmakefile_f:
+            with open(cmakefile_template_path, "r") as cmakefile_template_f:
+                for line in cmakefile_template_f:
+                    cmakefile_f.write(line)
+                cmakefile_f.write(
+                    f"target_compile_definitions(main PUBLIC -DTVM_WORKSPACE_SIZE_BYTES={memory_size})\n"
+                )
+                if verbose:
+                    cmakefile_f.write(f"set(CMAKE_VERBOSE_MAKEFILE TRUE)\n")
 
     def generate_project(self, model_library_format_path, standalone_crt_dir, project_dir, options):
-        project_dir = pathlib.Path(project_dir)
         # Make project directory.
-        project_dir.mkdir()
+        project_dir.mkdir(parents=True)
+        current_dir = pathlib.Path(__file__).parent.absolute()
 
         # Copy ourselves to the generated project. TVM may perform further build steps on the generated project
         # by launching the copy.
@@ -205,312 +178,187 @@ class Handler(server.ProjectAPIHandler):
 
         # Place Model Library Format tarball in the special location, which this script uses to decide
         # whether it's being invoked in a template or generated project.
-        project_model_library_format_tar_path = project_dir / MODEL_LIBRARY_FORMAT_RELPATH
-        shutil.copy2(model_library_format_path, project_model_library_format_tar_path)
+        project_model_library_format_path = project_dir / MODEL_LIBRARY_FORMAT_RELPATH
+        shutil.copy2(model_library_format_path, project_model_library_format_path)
 
         # Extract Model Library Format tarball.into <project_dir>/model.
-        extract_path = os.path.splitext(project_model_library_format_tar_path)[0]
-        with tarfile.TarFile(project_model_library_format_tar_path) as tf:
+        extract_path = project_dir / project_model_library_format_path.stem
+        with tarfile.TarFile(project_model_library_format_path) as tf:
             os.makedirs(extract_path)
             tf.extractall(path=extract_path)
 
         # Populate CRT.
         crt_path = project_dir / "crt"
-        crt_path.mkdir()
+        os.mkdir(crt_path)
         for item in self.CRT_COPY_ITEMS:
-            src_path = os.path.join(standalone_crt_dir, item)
+            src_path = standalone_crt_dir / item
             dst_path = crt_path / item
             if os.path.isdir(src_path):
                 shutil.copytree(src_path, dst_path)
             else:
                 shutil.copy2(src_path, dst_path)
 
-        # Populate Makefile.
-        with open(API_SERVER_DIR / "CMakeLists.txt.template", "r") as cmake_template_f:
-            with open(project_dir / "CMakeLists.txt", "w") as cmake_f:
-                for line in cmake_template_f:
-                    if self.API_SERVER_CRT_LIBS_TOKEN in line:
-                        crt_libs = self.CRT_LIBS_BY_PROJECT_TYPE[options["project_type"]]
-                        line = line.replace("<API_SERVER_CRT_LIBS>", crt_libs)
-
-                    cmake_f.write(line)
-
-        #self._create_prj_conf(project_dir, options)
+        # Populate CMake file
+        self._populate_cmake(
+            current_dir / f"{CMAKEFILE_FILENAME}.template",
+            project_dir / CMAKEFILE_FILENAME,
+            options.get("workspace_size_bytes", WORKSPACE_SIZE_BYTES),
+            options.get("verbose"),
+        )
+        cmake_path = project_dir / "cmake"
+        os.mkdir(cmake_path)
+        shutil.copytree(current_dir / "cmake", cmake_path, dirs_exist_ok=True)
 
         # Populate crt-config.h
         crt_config_dir = project_dir / "crt_config"
         crt_config_dir.mkdir()
         shutil.copy2(
-            API_SERVER_DIR / "crt_config" / "crt_config.h", crt_config_dir / "crt_config.h"
+            current_dir / "crt_config" / "crt_config.h",
+            crt_config_dir / "crt_config.h",
         )
 
         # Populate src/
         src_dir = project_dir / "src"
-        shutil.copytree(API_SERVER_DIR / "src" / options["project_type"], src_dir)
-        #print(src_dir)
-        #input()
+        src_dir.mkdir()
+        shutil.copy2(
+            current_dir / "src" / "main.cc",
+            src_dir / "main.cc",
+        )
+        shutil.copy2(
+            current_dir / "src" / "platform.cc",
+            src_dir / "platform.cc",
+        )
 
-        # Populate extra_files
-        if options.get("extra_files_tar"):
-            with tarfile.open(options["extra_files_tar"], mode="r:*") as tf:
-                def is_within_directory(directory, target):
-                    
-                    abs_directory = os.path.abspath(directory)
-                    abs_target = os.path.abspath(target)
-                
-                    prefix = os.path.commonprefix([abs_directory, abs_target])
-                    
-                    return prefix == abs_directory
-                
-                def safe_extract(tar, path=".", members=None, *, numeric_owner=False):
-                
-                    for member in tar.getmembers():
-                        member_path = os.path.join(path, member.name)
-                        if not is_within_directory(path, member_path):
-                            raise Exception("Attempted Path Traversal in Tar File")
-                
-                    tar.extractall(path, members, numeric_owner=numeric_owner) 
-                    
-                
-                safe_extract(tf, project_dir)
+        # Copy etiss.ini
+        shutil.copy2(
+            current_dir / "etiss.ini",
+            project_dir / "etiss.ini",
+        )
 
     def build(self, options):
-        BUILD_DIR.mkdir()
-
-        cmake_args = ["cmake", ".."]
-
-        if options.get("etiss_path"):
-            cmake_args.append("-DETISS_DIR=" + options["etiss_path"])
+        build_dir = PROJECT_DIR / "build"
+        build_dir.mkdir()
+        cmake_args = []
+        cmake_args.append("-DCMAKE_BUILD_TYPE=Debug")
+        cmake_args.append("-DRISCV_ARCH=" + options.get("arch", ARCH))
+        cmake_args.append("-DRISCV_ABI=" + options.get("abi", ABI))
+        cmake_args.append("-DRISCV_ABI=" + options.get("abi", ABI))
+        cmake_args.append("-DRISCV_ELF_GCC_PREFIX=" + options.get("gcc_prefix", ""))
+        cmake_args.append("-DRISCV_ELF_GCC_BASENAME=" + options.get("gcc_name", TRIPLE))
+        if options.get("quiet"):
+            check_call(["cmake", "..", *cmake_args], cwd=build_dir, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+            check_call(["make", f"-j{NPROC}"], cwd=build_dir, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
         else:
-            raise RuntimeError("Project Config 'etiss_path' undefined!")
-
-        if options.get("riscv_path"):
-            cmake_args.append("-DRISCV_ELF_GCC_PREFIX=" + options["riscv_path"])
-            cmake_args.append("-DRISCV_ELF_GCC_BASENAME=riscv32-unknown-elf")  # TODO
-        else:
-            raise RuntimeError("Project Config 'riscv_path' undefined!")
-
-        if options.get("debug"):
-            cmake_args.append("-DCMAKE_BUILD_TYPE=DEBUG")
-
-        if options.get("verbose"):
-            cmake_args.append("-DCMAKE_VERBOSE_MAKEFILE:BOOL=TRUE")
-
-        #print("BUILD", BUILD_DIR)
-        #input()
-        if options.get("verbose"):
-            check_call(cmake_args, cwd=BUILD_DIR)
-        else:
-            check_call(cmake_args, cwd=BUILD_DIR, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
-
-        args = ["make", "-j2"]
-        if options.get("verbose"):
-            args.append("VERBOSE=1")
-            check_call(args, cwd=BUILD_DIR)
-        else:
-            check_call(args, cwd=BUILD_DIR, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+            check_call(["cmake", "..", *cmake_args], cwd=build_dir)
+            check_call(["make", f"-j{NPROC}"], cwd=build_dir)
 
     def flash(self, options):
-        if options.get("transport"):
-            return  # NOTE: etissvp requires no flash step--it is launched from open_transport.
-        else:
-            transport = ETISSVPTransport(options)
-            to_return = transport.open()
-            self._transport = transport
-            transport._wait_for_etissvp()
-            transport._wait_for_etissvp()
-            self.close_transport()
-            return
+        pass  # Flashing does nothing on host.
+
+    def _set_nonblock(self, fd):
+        flag = fcntl.fcntl(fd, fcntl.F_GETFL)
+        fcntl.fcntl(fd, fcntl.F_SETFL, flag | os.O_NONBLOCK)
+        new_flag = fcntl.fcntl(fd, fcntl.F_GETFL)
+        assert (new_flag & os.O_NONBLOCK) != 0, "Cannot set file descriptor {fd} to non-blocking"
 
     def open_transport(self, options):
-        transport = ETISSVPTransport(options)
-
-        to_return = transport.open()
-        self._transport = transport
-        atexit.register(lambda: self.close_transport())
-        return to_return
-
-    def close_transport(self):
-        if self._transport is not None:
-            self._transport.close()
-            self._transport = None
-
-    def read_transport(self, n, timeout_sec):
-        if self._transport is None:
-            raise server.TransportClosedError()
-
-        return self._transport.read(n, timeout_sec)
-
-    def write_transport(self, data, timeout_sec):
-        if self._transport is None:
-            raise server.TransportClosedError()
-
-        return self._transport.write(data, timeout_sec)
-
-
-def _set_nonblock(fd):
-    flag = fcntl.fcntl(fd, fcntl.F_GETFL)
-    fcntl.fcntl(fd, fcntl.F_SETFL, flag | os.O_NONBLOCK)
-    new_flag = fcntl.fcntl(fd, fcntl.F_GETFL)
-    assert (new_flag & os.O_NONBLOCK) != 0, "Cannot set file descriptor {fd} to non-blocking"
-
-
-class ETISSVPMakeResult(enum.Enum):
-    ETISSVP_STARTED = "etissvp_started"
-    ETISSVP_ENDED = "etissvp_ended"
-    MAKE_FAILED = "make_failed"
-    EOF = "eof"
-
-
-class ETISSVPTransport:
-    """The user-facing ETISSVP transport class."""
-
-    def __init__(self, options):
-        self.options = options
-        self.proc = None
-        self.pipe_dir = None
-        self.read_fd = None
-        self.write_fd = None
-        self._queue = queue.Queue()
-
-    def open(self):
-        #self.pipe_dir = pathlib.Path(tempfile.mkdtemp())
-        self.pipe_dir = pathlib.Path(os.path.join(BUILD_DIR, ".tmp"))
-        if os.path.isdir(self.pipe_dir):
-            shutil.rmtree(self.pipe_dir)
-        os.mkdir(self.pipe_dir)
-        self.write_pipe = self.pipe_dir / "uartdevicefifoin"
-        # self.write_pipe2 = self.pipe_dir / "uartdevicefifoin2"
-        self.read_pipe = self.pipe_dir / "uartdevicefifoout"
-
-        #os.mkfifo(self.read_pipe)
-
-        #print("RUN", BUILD_DIR)
-        #input()
-        # os.mkfifo(self.write_pipe2)
-        if not self.options.get("etissvp_script"):
-            raise RuntimeError("Project Config 'etissvp_script' undefined!")
-        etissvp_env = os.environ.copy()
-        etissvp_env["ETISS_DIR"] = self.options["etiss_path"]
-        self.proc = subprocess.Popen(
-            [self.options["etissvp_script"], "app", *self.options["etissvp_script_args"].split()],
-            #["make", "run", f"UART_PIPE={self.pipe}"],
-            cwd=BUILD_DIR,
+        # print("open_transport")
+        # self._proc = subprocess.Popen(
+        #     [self.BUILD_TARGET], stdin=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=0
+        # )
+        # print("PROJECT_DIR", PROJECT_DIR)
+        args = []
+        etiss_script = options.get("etiss_script")
+        assert etiss_script is not None
+        args.append(etiss_script)
+        args.append(self.BUILD_TARGET)
+        args.extend(options.get("etiss_args", []))
+        ini_path = "etiss.ini"
+        args.append("-i" + ini_path)
+        # args.append("tgdb")
+        # args.append("noattach")
+        # print("args", args)
+        # input(">")
+        # time.sleep(30)
+        self._proc = subprocess.Popen(
+            args,
+            stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            env=etissvp_env,
-            preexec_fn=os.setsid,
+            bufsize=0,
         )
-        #input()
-        #self._wait_for_etissvp()
-
-        # NOTE: although each pipe is unidirectional, open both as RDWR to work around a select
-        # limitation on linux. Without this, non-blocking I/O can't use timeouts because named
-        # FIFO are always considered ready to read when no one has opened them for writing.
-        #while not (os.path.exists(self.read_pipe) and os.path.exists(self.write_pipe) and os.path.exists(self.write_pipe2)):
-        while not (os.path.exists(self.read_pipe) and os.path.exists(self.write_pipe)):
-            time.sleep(1)
-        time.sleep(1)
-
-        self.read_fd = os.open(self.read_pipe, os.O_RDWR | os.O_NONBLOCK)
-        self.write_fd = os.open(self.write_pipe, os.O_RDWR | os.O_NONBLOCK)
-        # self.write_fd2 = os.open(self.write_pipe2, os.O_RDWR | os.O_NONBLOCK)
-        _set_nonblock(self.read_fd)
-        _set_nonblock(self.write_fd)
-        # _set_nonblock(self.write_fd2)
-
-        #self._wait_for_etissvp()
-
-        #return server.TransportTimeouts(
-        #    session_start_retry_timeout_sec=1.0,
-        #    #session_start_timeout_sec=200.0, #20.0,
-        #    session_start_timeout_sec=400.0, #20.0,
-        #    #session_established_timeout_sec=10.0,
-        #    session_established_timeout_sec=200.0, #20.0,
-        #)
-        return server.TransportTimeouts(
-            session_start_retry_timeout_sec=1,
-            #session_start_timeout_sec=200.0, #20.0,
-            session_start_timeout_sec=10, #20.0,
-            #session_established_timeout_sec=10.0,
-            session_established_timeout_sec=10, #20.0,
-        )
+        # print("A")
+        self._set_nonblock(self._proc.stdin.fileno())
+        self._set_nonblock(self._proc.stdout.fileno())
+        # while True:
+        #     self.read_transport(1000, 10.0)
+        #     time.sleep(1)
+        # input("?")
         return server.TransportTimeouts(
             session_start_retry_timeout_sec=0,
             session_start_timeout_sec=0,
             session_established_timeout_sec=0,
         )
 
-    def close(self):
-        did_write = False
-        if self.write_fd is not None:
-            os.close(self.write_fd)
-            self.write_fd = None
+    def close_transport(self):
+        # print("close_transport")
+        if self._proc is not None:
+            proc = self._proc
+            self._proc = None
+            proc.terminate()
+            proc.wait()
 
-        # if self.write_fd2 is not None:
-        #     os.close(self.write_fd2)
-        #     self.write_fd2 = None
+    def _await_ready(self, rlist, wlist, timeout_sec=None, end_time=None):
+        if timeout_sec is None and end_time is not None:
+            timeout_sec = max(0, end_time - time.monotonic())
 
-        if self.proc:
-            # Killing the ETISS subprocess seems to need this workaround...
-            self.proc.send_signal(signal.SIGINT)
-            time.sleep(1)
-            self.proc.kill()
-            pgrp = os.getpgid(self.proc.pid)
-            os.killpg(pgrp, signal.SIGKILL)
+        rlist, wlist, xlist = select.select(rlist, wlist, rlist + wlist, timeout_sec)
+        if not rlist and not wlist and not xlist:
+            raise server.IoTimeoutError()
 
-        if self.read_fd:
-            os.close(self.read_fd)
-            self.read_fd = None
+        return True
 
-        if self.pipe_dir is not None:
-            if os.path.exists(self.pipe_dir):
-                shutil.rmtree(self.pipe_dir)
-            self.pipe_dir = None
+    def read_transport(self, n, timeout_sec):
+        # print("read_transport", n)
+        if self._proc is None:
+            raise server.TransportClosedError()
 
-    def read(self, n, timeout_sec):
-        return server.read_with_timeout(self.read_fd, n, timeout_sec)
+        fd = self._proc.stdout.fileno()
+        end_time = None if timeout_sec is None else time.monotonic() + timeout_sec
 
-    def write(self, data, timeout_sec):
-        to_write = bytearray(data)
+        try:
+            self._await_ready([fd], [], end_time=end_time)
+            to_return = os.read(fd, n)
+        except BrokenPipeError:
+            to_return = 0
 
-        while to_write:
-            # num_written = server.write_with_timeout(self.write_fd, to_write, timeout_sec, dbg_fd=self.write_fd2)
-            num_written = server.write_with_timeout(self.write_fd, to_write, timeout_sec)
-            to_write = to_write[num_written:]
+        if not to_return:
+            self.close_transport()
+            raise server.TransportClosedError()
+        # print("ret", to_return)
 
-    def _etissvp_check_stdout(self):
-        for line in self.proc.stdout:
-            line = str(line.decode(errors="ignore"))
-            _LOG.info("%s", line.replace("\n", ""))
-            if "=== Simulation start ===" in line:  # TODO
-                self._queue.put(ETISSVPMakeResult.ETISSVP_STARTED)
-            elif "=== Simulation end ===" in line:  # TODO
-                self._queue.put(ETISSVPMakeResult.ETISSVP_ENDED)
-            else:
-                line = re.sub("[^a-zA-Z0-9 \n]", "", line)
-                pattern = r"recipe for target (\w*) failed"
-                if re.search(pattern, line, re.IGNORECASE):
-                    self._queue.put(ETISSVPMakeResult.MAKE_FAILED)
-        self._queue.put(ETISSVPMakeResult.EOF)
+        return to_return
 
-    def _wait_for_etissvp(self):
-        threading.Thread(target=self._etissvp_check_stdout, daemon=True).start()
-        while True:
+    def write_transport(self, data, timeout_sec):
+        # print("write_transport", data)
+        if self._proc is None:
+            raise server.TransportClosedError()
+
+        fd = self._proc.stdin.fileno()
+        end_time = None if timeout_sec is None else time.monotonic() + timeout_sec
+
+        data_len = len(data)
+        while data:
+            self._await_ready([], [fd], end_time=end_time)
             try:
-                item = self._queue.get(timeout=120)
-            except Exception:
-                raise TimeoutError("ETISSVP setup timeout.")
+                num_written = os.write(fd, data)
+            except BrokenPipeError:
+                num_written = 0
 
-            if item == ETISSVPMakeResult.ETISSVP_STARTED:
-                break
+            if not num_written:
+                self.disconnect_transport()
+                raise server.TransportClosedError()
 
-            if item == ETISSVPMakeResult.ETISSVP_ENDED:
-                break
-
-            #if item in [ETISSVPMakeResult.MAKE_FAILED, ETISSVPMakeResult.EOF]:
-            #    raise RuntimeError("ETISSVP setup failed.")
-
-            #raise ValueError(f"{item} not expected.")
+            data = data[num_written:]
 
 
 if __name__ == "__main__":

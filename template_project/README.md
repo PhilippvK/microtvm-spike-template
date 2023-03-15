@@ -15,7 +15,4 @@
 <!--- specific language governing permissions and limitations -->
 <!--- under the License. -->
 
-This directory contains a Zephyr-based "demo" runtime environment that
-pulls together the microTVM runtime dependencies into a single application
-that can communicate with a Python-based host program via the UART, using
-TVM's RPC protocol.
+TODO
