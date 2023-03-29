@@ -27,6 +27,7 @@ import logging
 import subprocess
 import tarfile
 import time
+import distutils.util
 
 from tvm.micro.project_api import server
 
@@ -57,6 +58,14 @@ ARCH = "rv32gc"
 ABI = "ilp32d"
 TRIPLE = "riscv32-unknown-elf"
 NPROC = multiprocessing.cpu_count()
+
+
+def str2bool(value, allow_none=False):
+    if value is None:
+        assert allow_none, "str2bool received None value while allow_none=False"
+        return value
+    assert isinstance(value, str)
+    return bool(value) if isinstance(value, (int, bool)) else bool(distutils.util.strtobool(value))
 
 
 def check_call(cmd_args, *args, **kwargs):
@@ -218,7 +227,7 @@ class Handler(server.ProjectAPIHandler):
             current_dir / f"{CMAKEFILE_FILENAME}.template",
             project_dir / CMAKEFILE_FILENAME,
             options.get("workspace_size_bytes", WORKSPACE_SIZE_BYTES),
-            options.get("verbose"),
+            str2bool(options.get("verbose")),
         )
         cmake_path = project_dir / "cmake"
         os.mkdir(cmake_path)
@@ -254,7 +263,7 @@ class Handler(server.ProjectAPIHandler):
         cmake_args.append("-DRISCV_ABI=" + options.get("abi", ABI))
         cmake_args.append("-DRISCV_ELF_GCC_PREFIX=" + options.get("gcc_prefix", ""))
         cmake_args.append("-DRISCV_ELF_GCC_BASENAME=" + options.get("gcc_name", TRIPLE))
-        if options.get("quiet"):
+        if str2bool(options.get("quiet")):
             check_call(["cmake", "..", *cmake_args], cwd=build_dir, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
             check_call(["make", f"-j{NPROC}"], cwd=build_dir, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
         else:
