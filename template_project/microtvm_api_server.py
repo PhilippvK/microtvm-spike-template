@@ -254,8 +254,7 @@ class Handler(server.ProjectAPIHandler):
         cmake_args.append("-DRISCV_ABI=" + options.get("abi", ABI))
         cmake_args.append("-DRISCV_ELF_GCC_PREFIX=" + options.get("gcc_prefix", ""))
         cmake_args.append("-DRISCV_ELF_GCC_BASENAME=" + options.get("gcc_name", TRIPLE))
-        # if options.get("quiet"):
-        if False:
+        if options.get("quiet"):
             check_call(["cmake", "..", *cmake_args], cwd=build_dir, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
             check_call(["make", f"-j{NPROC}"], cwd=build_dir, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
         else:
@@ -317,7 +316,7 @@ class Handler(server.ProjectAPIHandler):
         return True
 
     def read_transport(self, n, timeout_sec):
-        print("read_transport", n)
+        # print("read_transport", n)
         if self._proc is None:
             raise server.TransportClosedError()
 
@@ -338,7 +337,7 @@ class Handler(server.ProjectAPIHandler):
         return to_return
 
     def write_transport(self, data, timeout_sec):
-        print("write_transport", data)
+        # print("write_transport", data)
         if self._proc is None:
             raise server.TransportClosedError()
 

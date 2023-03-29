@@ -36,7 +36,7 @@
 #include <tvm/runtime/crt/graph_executor_module.h>
 #endif
 
-#define DBG
+// #define DBG
 #ifdef DBG
 FILE *fp;
 #define dbginit() fp = fopen("/tmp/test.txt", "w+");
@@ -93,10 +93,8 @@ int main(int argc, char** argv) {
 
   dbginit();
   for (;;) {
-    dbgprintf("Loop\n");
     uint8_t c;
     int ret_code = read(STDIN_FILENO, &c, 1);
-    dbgprintf("Loop2\n");
     if (ret_code < 0) {
       TVMLogf("?Ret222?\n");
       perror("microTVM runtime: read failed");
