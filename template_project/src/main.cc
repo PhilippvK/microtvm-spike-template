@@ -36,6 +36,18 @@
 #include <tvm/runtime/crt/graph_executor_module.h>
 #endif
 
+#define DBG
+#ifdef DBG
+FILE *fp;
+#define dbginit() fp = fopen("/tmp/test.txt", "w+");
+#define dbgprintf(...) fprintf(fp, __VA_ARGS__); fflush(fp);
+#define dbgend() fclose(fp);
+#else
+#define dbginit()
+#define dbgprintf(...)
+#define dbgend()
+#endif  // DBG
+
 extern "C" {
 
 ssize_t MicroTVMWriteFunc(void* context, const uint8_t* data, size_t num_bytes) {
@@ -77,11 +89,14 @@ int main(int argc, char** argv) {
 
   setbuf(stdin, NULL);
   setbuf(stdout, NULL);
-  TVMLogf("microTVM ETISS runtime - running");
+  TVMLogf("microTVM SPIKE runtime - running");
 
+  dbginit();
   for (;;) {
+    dbgprintf("Loop\n");
     uint8_t c;
     int ret_code = read(STDIN_FILENO, &c, 1);
+    dbgprintf("Loop2\n");
     if (ret_code < 0) {
       TVMLogf("?Ret222?\n");
       perror("microTVM runtime: read failed");

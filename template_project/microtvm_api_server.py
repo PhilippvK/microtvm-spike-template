@@ -18,7 +18,6 @@
 import fcntl
 import multiprocessing
 import os
-import sys
 import shlex
 import os.path
 import pathlib
@@ -28,13 +27,14 @@ import logging
 import subprocess
 import tarfile
 import time
-import re
 
 from tvm.micro.project_api import server
 
 _LOG = logging.getLogger(__name__)
 _LOG.setLevel(logging.WARNING)
 
+SPIKE_EXE = "spike"
+SPIKE_PK = "pk"
 
 PROJECT_DIR = pathlib.Path(os.path.dirname(__file__) or os.path.getcwd())
 
@@ -57,6 +57,7 @@ ARCH = "rv32gc"
 ABI = "ilp32d"
 TRIPLE = "riscv32-unknown-elf"
 NPROC = multiprocessing.cpu_count()
+
 
 def check_call(cmd_args, *args, **kwargs):
     cwd_str = "" if "cwd" not in kwargs else f" (in cwd: {kwargs['cwd']})"
@@ -102,7 +103,7 @@ class Handler(server.ProjectAPIHandler):
                 ),
                 server.ProjectOption(
                     "arch",
-                    optional=["build"],
+                    optional=["build", "open_transport"],
                     default=ARCH,
                     type="str",
                     help="Name used ARCH.",
@@ -129,17 +130,32 @@ class Handler(server.ProjectAPIHandler):
                     help="Name used COMPILER.",
                 ),
                 server.ProjectOption(
-                    "etiss_args",
-                    optional=["open_transport"],
-                    default="",
+                    "spike_exe",
+                    required=(["open_transport"] if not SPIKE_EXE else None),
+                    optional=(["open_transport"] if SPIKE_EXE else []),
+                    default=SPIKE_EXE,
                     type="str",
-                    help="TODO.",
+                    help="Path to the spike (riscv-isa-sim) executable.",
                 ),
                 server.ProjectOption(
-                    "etiss_script",
-                    required=["open_transport"],
+                    "spike_pk",
+                    required=(["open_transport"] if not SPIKE_PK else None),
+                    optional=(["open_transport"] if SPIKE_PK else None),
+                    default=SPIKE_EXE,
                     type="str",
-                    help="Path to run_helper.sh script.",
+                    help="Path to the proxy-kernel (pk).",
+                ),
+                server.ProjectOption(
+                    "spike_extra_args",
+                    optional=["open_transport"],
+                    type="str",
+                    help="Additional arguments added to the spike command line.",
+                ),
+                server.ProjectOption(
+                    "pk_extra_args",
+                    optional=["open_transport"],
+                    type="str",
+                    help="Additional arguments added to the pk command line.",
                 ),
             ],
         )
@@ -156,7 +172,6 @@ class Handler(server.ProjectAPIHandler):
     ):
         """Generate CMakeList file from template."""
 
-        regex = re.compile(r"([A-Z_]+) := (<[A-Z_]+>)")
         with open(cmakefile_path, "w") as cmakefile_f:
             with open(cmakefile_template_path, "r") as cmakefile_template_f:
                 for line in cmakefile_template_f:
@@ -229,12 +244,6 @@ class Handler(server.ProjectAPIHandler):
             src_dir / "platform.cc",
         )
 
-        # Copy etiss.ini
-        shutil.copy2(
-            current_dir / "etiss.ini",
-            project_dir / "etiss.ini",
-        )
-
     def build(self, options):
         build_dir = PROJECT_DIR / "build"
         build_dir.mkdir()
@@ -245,7 +254,8 @@ class Handler(server.ProjectAPIHandler):
         cmake_args.append("-DRISCV_ABI=" + options.get("abi", ABI))
         cmake_args.append("-DRISCV_ELF_GCC_PREFIX=" + options.get("gcc_prefix", ""))
         cmake_args.append("-DRISCV_ELF_GCC_BASENAME=" + options.get("gcc_name", TRIPLE))
-        if options.get("quiet"):
+        # if options.get("quiet"):
+        if False:
             check_call(["cmake", "..", *cmake_args], cwd=build_dir, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
             check_call(["make", f"-j{NPROC}"], cwd=build_dir, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
         else:
@@ -263,36 +273,25 @@ class Handler(server.ProjectAPIHandler):
 
     def open_transport(self, options):
         # print("open_transport")
-        # self._proc = subprocess.Popen(
-        #     [self.BUILD_TARGET], stdin=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=0
-        # )
-        # print("PROJECT_DIR", PROJECT_DIR)
-        args = []
-        etiss_script = options.get("etiss_script")
-        assert etiss_script is not None
-        args.append(etiss_script)
-        args.append(self.BUILD_TARGET)
-        args.extend(options.get("etiss_args", []))
-        ini_path = "etiss.ini"
-        args.append("-i" + ini_path)
-        # args.append("tgdb")
-        # args.append("noattach")
-        # print("args", args)
-        # input(">")
-        # time.sleep(30)
+        isa = options.get("arch", ARCH)
+        if isa is None:
+            isa = ARCH
+        spike_extra = options.get("spike_extra_args")
+        if spike_extra in [None, ""]:
+            spike_extra = []
+        else:
+            spike_extra = [spike_extra]
+        pk_extra = options.get("pk_extra_args")
+        if pk_extra in [None, ""]:
+            pk_extra = []
+        else:
+            pk_extra = [pk_extra]
+        spike_args = [options.get("spike_exe"), f"--isa={isa}", *spike_extra, options.get("spike_pk"), *pk_extra]
         self._proc = subprocess.Popen(
-            args,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            bufsize=0,
+            spike_args + [self.BUILD_TARGET], stdin=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=0
         )
-        # print("A")
         self._set_nonblock(self._proc.stdin.fileno())
         self._set_nonblock(self._proc.stdout.fileno())
-        # while True:
-        #     self.read_transport(1000, 10.0)
-        #     time.sleep(1)
-        # input("?")
         return server.TransportTimeouts(
             session_start_retry_timeout_sec=0,
             session_start_timeout_sec=0,
@@ -318,7 +317,7 @@ class Handler(server.ProjectAPIHandler):
         return True
 
     def read_transport(self, n, timeout_sec):
-        # print("read_transport", n)
+        print("read_transport", n)
         if self._proc is None:
             raise server.TransportClosedError()
 
@@ -339,14 +338,14 @@ class Handler(server.ProjectAPIHandler):
         return to_return
 
     def write_transport(self, data, timeout_sec):
-        # print("write_transport", data)
+        print("write_transport", data)
         if self._proc is None:
             raise server.TransportClosedError()
 
         fd = self._proc.stdin.fileno()
         end_time = None if timeout_sec is None else time.monotonic() + timeout_sec
 
-        data_len = len(data)
+        # data_len = len(data)
         while data:
             self._await_ready([], [fd], end_time=end_time)
             try:

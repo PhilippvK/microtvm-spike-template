@@ -108,8 +108,8 @@ params = {"weight": weight_sample}
 
 RUNTIME = Runtime("crt", {"system-lib": True})
 # TARGET = tvm.micro.testing.get_target("crt")
-# TARGET = tvm.target.Target("c")
-TARGET = tvm.target.Target("llvm -device=riscv_cpu -mcpu=generic-rv32 -mtriple=riscv32-unknown-elf -mabi=ilp32d -mattr=+m,+a,+f,+d,+c -model etiss")
+TARGET = tvm.target.Target("c")
+# TARGET = tvm.target.Target("llvm -device=riscv_cpu -mcpu=generic-rv32 -mtriple=riscv32-unknown-elf -mabi=ilp32d -mattr=+m,+a,+f,+d,+c -model etiss")
 # --target-llvm-device riscv_cpu --target-llvm-mcpu generic-rv32 --target-llvm-mtriple riscv32-unknown-elf --target-llvm-mabi ilp32d --target-llvm-mattr +m,+a,+f,+d,+c --target-llvm-model etiss
 
 # Compiling for physical hardware
@@ -152,10 +152,11 @@ assert len(tasks) > 0
 
 module_loader = tvm.micro.AutoTvmModuleLoader(
     # template_project_dir=pathlib.Path(tvm.micro.get_microtvm_template_projects("crt")),
-    template_project_dir="/var/tmp/ga87puy/llvm-gen/mlonmcu/workspace/deps/src/tvm/apps/microtvm/etiss/template_project",
+    template_project_dir="/var/tmp/ga87puy/mlonmcu/mlonmcu/workspace/deps/src/microtvm_spike/template_project",
     project_options={
         "verbose": False,
-        "etiss_script": "/var/tmp/ga87puy/llvm-gen/etiss/build/installed/bin/run_helper.sh",
+        "spike_exe": "/var/tmp/ga87puy/mlonmcu/mlonmcu/workspace/deps/install/spike/spike",
+        "spike_pk": "/var/tmp/ga87puy/mlonmcu/mlonmcu/workspace/deps/install/spikepk/pk",
     },
 )
 builder = tvm.autotvm.LocalBuilder(
@@ -228,12 +229,13 @@ with pass_context:
 temp_dir = tvm.contrib.utils.tempdir()
 project = tvm.micro.generate_project(
     # str(tvm.micro.get_microtvm_template_projects("crt")),
-    "/var/tmp/ga87puy/llvm-gen/mlonmcu/workspace/deps/src/tvm/apps/microtvm/etiss/template_project",
+    "/var/tmp/ga87puy/mlonmcu/mlonmcu/workspace/deps/src/microtvm_spike/template_project",
     lowered,
     temp_dir / "project",
     {
         "verbose": False,
-        "etiss_script": "/var/tmp/ga87puy/llvm-gen/etiss/build/installed/bin/run_helper.sh",
+        "spike_exe": "/var/tmp/ga87puy/mlonmcu/mlonmcu/workspace/deps/install/spike/spike",
+        "spike_pk": "/var/tmp/ga87puy/mlonmcu/mlonmcu/workspace/deps/install/spikepk/pk",
     },
 )
 
@@ -276,12 +278,13 @@ with tvm.autotvm.apply_history_best(str(autotune_log_file)):
 temp_dir = tvm.contrib.utils.tempdir()
 project = tvm.micro.generate_project(
     # str(tvm.micro.get_microtvm_template_projects("crt")),
-    "/var/tmp/ga87puy/llvm-gen/mlonmcu/workspace/deps/src/tvm/apps/microtvm/etiss/template_project",
+    "/var/tmp/ga87puy/mlonmcu/mlonmcu/workspace/deps/src/microtvm_spike/template_project",
     lowered_tuned,
     temp_dir / "project",
     {
         "verbose": False,
-        "etiss_script": "/var/tmp/ga87puy/llvm-gen/etiss/build/installed/bin/run_helper.sh",
+        "spike_exe": "/var/tmp/ga87puy/mlonmcu/mlonmcu/workspace/deps/install/spike/spike",
+        "spike_pk": "/var/tmp/ga87puy/mlonmcu/mlonmcu/workspace/deps/install/spikepk/pk",
     },
 )
 
