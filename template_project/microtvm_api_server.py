@@ -256,7 +256,7 @@ class Handler(server.ProjectAPIHandler):
         build_dir = PROJECT_DIR / "build"
         build_dir.mkdir()
         cmake_args = []
-        cmake_args.append("-DCMAKE_BUILD_TYPE=Debug")
+        cmake_args.append("-DCMAKE_BUILD_TYPE=Release")
         cmake_args.append("-DRISCV_ARCH=" + options.get("arch", ARCH))
         cmake_args.append("-DRISCV_ABI=" + options.get("abi", ABI))
         cmake_args.append("-DRISCV_ABI=" + options.get("abi", ABI))
