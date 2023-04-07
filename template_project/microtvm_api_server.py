@@ -58,6 +58,8 @@ ARCH = "rv32gc"
 ABI = "ilp32d"
 TRIPLE = "riscv32-unknown-elf"
 NPROC = multiprocessing.cpu_count()
+VLEN = 128
+ELEN = 64
 
 
 def str2bool(value, allow_none=False):
@@ -129,6 +131,20 @@ class Handler(server.ProjectAPIHandler):
                     default=ABI,
                     type="str",
                     help="Name used ABI.",
+                ),
+                server.ProjectOption(
+                    "vlen",
+                    optional=["open_transport"],
+                    default=VLEN,
+                    type="int",
+                    help="VLEN used if V-Extension is available.",
+                ),
+                server.ProjectOption(
+                    "elen",
+                    optional=["open_transport"],
+                    default=ELEN,
+                    type="int",
+                    help="ELEN used if V-Extension is available.",
                 ),
                 server.ProjectOption(
                     "gcc_prefix",
@@ -297,6 +313,11 @@ class Handler(server.ProjectAPIHandler):
             spike_extra = []
         else:
             spike_extra = [spike_extra]
+        vlen = options.get("vlen", VLEN)
+        elen = options.get("elen", ELEN)
+        assert vlen >= 128, "VLEN has to be >= 128"
+        assert elen in [32, 64], "ELEN has to be either 32 or 64"
+        spike_extra.append(f"--varch=vlen:{vlen},elen:{elen}")
         pk_extra = options.get("pk_extra_args")
         if pk_extra in [None, ""]:
             pk_extra = []
