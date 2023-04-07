@@ -39,9 +39,6 @@ This tutorial explains how to autotune a model using the C runtime.
 
 # You can skip the following section (installing Zephyr) if the following flag is False.
 # Installing Zephyr takes ~20 min.
-import os
-
-use_physical_hw = bool(os.getenv("TVM_MICRO_USE_HW"))
 
 ######################################################################
 #
@@ -112,16 +109,6 @@ TARGET = tvm.target.Target("c")
 # TARGET = tvm.target.Target("llvm -device=riscv_cpu -mcpu=generic-rv32 -mtriple=riscv32-unknown-elf -mabi=ilp32d -mattr=+m,+a,+f,+d,+c -model etiss")
 # --target-llvm-device riscv_cpu --target-llvm-mcpu generic-rv32 --target-llvm-mtriple riscv32-unknown-elf --target-llvm-mabi ilp32d --target-llvm-mattr +m,+a,+f,+d,+c --target-llvm-model etiss
 
-# Compiling for physical hardware
-# --------------------------------------------------------------------------
-#  When running on physical hardware, choose a TARGET and a BOARD that describe the hardware. The
-#  STM32L4R5ZI Nucleo target and board is chosen in the example below.
-if use_physical_hw:
-    BOARD = os.getenv("TVM_MICRO_BOARD", default="nucleo_l4r5zi")
-    SERIAL = os.getenv("TVM_MICRO_SERIAL", default=None)
-    TARGET = tvm.micro.testing.get_target("zephyr", BOARD)
-
-
 #########################
 # Extracting tuning tasks
 #########################
@@ -170,28 +157,6 @@ runner = tvm.autotvm.LocalRunner(number=1, repeat=1, timeout=10000, module_loade
 
 measure_option = tvm.autotvm.measure_option(builder=builder, runner=runner)
 
-# Compiling for physical hardware
-if use_physical_hw:
-    module_loader = tvm.micro.AutoTvmModuleLoader(
-        template_project_dir=pathlib.Path(tvm.micro.get_microtvm_template_projects("zephyr")),
-        project_options={
-            "board": BOARD,
-            "verbose": False,
-            "project_type": "host_driven",
-            "serial_number": SERIAL,
-        },
-    )
-    builder = tvm.autotvm.LocalBuilder(
-        n_parallel=1,
-        build_kwargs={"build_option": {"tir.disable_vectorize": True}},
-        do_fork=False,
-        build_func=tvm.micro.autotvm_build_func,
-        runtime=RUNTIME,
-    )
-    runner = tvm.autotvm.LocalRunner(number=1, repeat=1, timeout=10000, module_loader=module_loader)
-
-    measure_option = tvm.autotvm.measure_option(builder=builder, runner=runner)
-
 ##########################
 # Run Autotuning
 ##########################
@@ -239,22 +204,6 @@ project = tvm.micro.generate_project(
     },
 )
 
-# Compiling for physical hardware
-if use_physical_hw:
-    temp_dir = tvm.contrib.utils.tempdir()
-    project = tvm.micro.generate_project(
-        str(tvm.micro.get_microtvm_template_projects("zephyr")),
-        lowered,
-        temp_dir / "project",
-        {
-            "board": BOARD,
-            "verbose": False,
-            "project_type": "host_driven",
-            "serial_number": SERIAL,
-            "config_main_stack_size": 4096,
-        },
-    )
-
 project.build()
 project.flash()
 with tvm.micro.Session(project.transport()) as session:
@@ -287,22 +236,6 @@ project = tvm.micro.generate_project(
         "spike_pk": "/var/tmp/ga87puy/mlonmcu/mlonmcu/workspace/deps/install/spikepk/pk",
     },
 )
-
-# Compiling for physical hardware
-if use_physical_hw:
-    temp_dir = tvm.contrib.utils.tempdir()
-    project = tvm.micro.generate_project(
-        str(tvm.micro.get_microtvm_template_projects("zephyr")),
-        lowered_tuned,
-        temp_dir / "project",
-        {
-            "board": BOARD,
-            "verbose": False,
-            "project_type": "host_driven",
-            "serial_number": SERIAL,
-            "config_main_stack_size": 4096,
-        },
-    )
 
 project.build()
 project.flash()
