@@ -138,6 +138,7 @@ assert len(tasks) > 0
 #
 project_options = {
     "verbose": False,
+    "quiet": True,
     "spike_exe": "/var/tmp/ga87puy/mlonmcu/mlonmcu/workspace/deps/install/spike/spike",
     "spike_pk": "/var/tmp/ga87puy/mlonmcu/mlonmcu/workspace/deps/install/spikepk/pk",
     "arch": "rv32gcv",
