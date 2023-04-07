@@ -50,7 +50,7 @@ This tutorial explains how to autotune a model using the C runtime.
 # Import Python dependencies
 # -------------------------------
 #
-import json
+import os
 import numpy as np
 import pathlib
 
@@ -141,11 +141,11 @@ project_options = {
     "quiet": True,
     "spike_exe": "/var/tmp/ga87puy/mlonmcu/mlonmcu/workspace/deps/install/spike/spike",
     "spike_pk": "/var/tmp/ga87puy/mlonmcu/mlonmcu/workspace/deps/install/spikepk/pk",
-    "arch": "rv32gcv",
+    "arch": "rv32gc",
     "abi": "ilp32d",
     "vlen": 1024,
-    "toolchain": "llvm",
-    # "toolchain": "gcc",
+    # "toolchain": "llvm",
+    "toolchain": "gcc",
     "gcc_prefix": "/var/tmp/ga87puy/mlonmcu/mlonmcu/workspace/deps/install/riscv_gcc/",
     "llvm_dir": "/var/tmp/ga87puy/mlonmcu/mlonmcu/workspace/deps/install/llvm/",
 }
