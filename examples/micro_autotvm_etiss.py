@@ -143,6 +143,10 @@ project_options = {
     "arch": "rv32gcv",
     "abi": "ilp32d",
     "vlen": 1024,
+    "toolchain": "llvm",
+    # "toolchain": "gcc",
+    "gcc_prefix": "/var/tmp/ga87puy/mlonmcu/mlonmcu/workspace/deps/install/riscv_gcc/",
+    "llvm_dir": "/var/tmp/ga87puy/mlonmcu/mlonmcu/workspace/deps/install/llvm/",
 }
 
 module_loader = tvm.micro.AutoTvmModuleLoader(

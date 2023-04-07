@@ -27,11 +27,9 @@ SET(CMAKE_SYSTEM_NAME Generic)
 SET(CMAKE_SYSTEM_PROCESSOR ETISS)
 
 # select the toolchain and corresponding CMAKE_TOOLCHAIN_FILE
-SET(TOOLCHAIN
-    "gcc"
-    CACHE STRING "select from llvm and gcc for the compilation."
-)
-variable_watch(LLVM_DIR)
+SET(TOOLCHAIN "gcc" CACHE STRING "Specify which toolchain to use.")
+SET_PROPERTY(CACHE TOOLCHAIN PROPERTY STRINGS gcc llvm)
+# variable_watch(LLVM_DIR)
 SET(CMAKE_TOOLCHAIN_FILE "cmake/toolchain_${TOOLCHAIN}.cmake")
 
 # the following three lines can be deleted because it is repeat in LookupClang.cmake

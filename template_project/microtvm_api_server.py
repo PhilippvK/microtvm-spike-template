@@ -57,6 +57,7 @@ BUILD_TARGET = "build/main"
 ARCH = "rv32gc"
 ABI = "ilp32d"
 TRIPLE = "riscv32-unknown-elf"
+TOOLCHAIN = "gcc"
 NPROC = multiprocessing.cpu_count()
 VLEN = 128
 ELEN = 64
@@ -145,6 +146,21 @@ class Handler(server.ProjectAPIHandler):
                     default=ELEN,
                     type="int",
                     help="ELEN used if V-Extension is available.",
+                ),
+                server.ProjectOption(
+                    "toolchain",
+                    optional=["build"],
+                    default=TOOLCHAIN,
+                    choices=["gcc", "llvm"],
+                    type="str",
+                    help="Name used TOOLCHAIN.",
+                ),
+                server.ProjectOption(
+                    "llvm_dir",
+                    optional=["build"],
+                    default=None,
+                    type="str",
+                    help="Path to LLVM install directory",
                 ),
                 server.ProjectOption(
                     "gcc_prefix",
@@ -282,6 +298,10 @@ class Handler(server.ProjectAPIHandler):
         debug = options.get("debug", False)
         build_type = "Debug" if debug else "Release"
         cmake_args.append(f"-DCMAKE_BUILD_TYPE={build_type}")
+        cmake_args.append("-DTOOLCHAIN=" + options.get("toolchain", TOOLCHAIN))
+        llvm_dir = options.get("llvm_dir", None)
+        if llvm_dir:
+            cmake_args.append("-DLLVM_DIR=" + llvm_dir)
         cmake_args.append("-DRISCV_ARCH=" + options.get("arch", ARCH))
         cmake_args.append("-DRISCV_ABI=" + options.get("abi", ABI))
         cmake_args.append("-DRISCV_ABI=" + options.get("abi", ABI))
