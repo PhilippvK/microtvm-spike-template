@@ -103,6 +103,13 @@ class Handler(server.ProjectAPIHandler):
                     help="Supress all compilation messages",
                 ),
                 server.ProjectOption(
+                    "debug",
+                    optional=["build"],
+                    type="bool",
+                    default=False,
+                    help="Build with debugging symbols and -O0",
+                ),
+                server.ProjectOption(
                     "workspace_size_bytes",
                     optional=["generate_project"],
                     type="int",
@@ -256,7 +263,9 @@ class Handler(server.ProjectAPIHandler):
         build_dir = PROJECT_DIR / "build"
         build_dir.mkdir()
         cmake_args = []
-        cmake_args.append("-DCMAKE_BUILD_TYPE=Debug")
+        debug = options.get("debug", False)
+        build_type = "Debug" if debug else "Release"
+        cmake_args.append(f"-DCMAKE_BUILD_TYPE={build_type}")
         cmake_args.append("-DRISCV_ARCH=" + options.get("arch", ARCH))
         cmake_args.append("-DRISCV_ABI=" + options.get("abi", ABI))
         cmake_args.append("-DRISCV_ABI=" + options.get("abi", ABI))
