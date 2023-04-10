@@ -333,11 +333,12 @@ class Handler(server.ProjectAPIHandler):
             spike_extra = []
         else:
             spike_extra = [spike_extra]
-        vlen = options.get("vlen", VLEN)
-        elen = options.get("elen", ELEN)
-        assert vlen >= 128, "VLEN has to be >= 128"
-        assert elen in [32, 64], "ELEN has to be either 32 or 64"
-        spike_extra.append(f"--varch=vlen:{vlen},elen:{elen}")
+        vlen = int(options.get("vlen", VLEN))
+        if vlen > 0:
+            elen = options.get("elen", ELEN)
+            assert vlen >= 128, "VLEN has to be >= 128"
+            assert elen in [32, 64], "ELEN has to be either 32 or 64"
+            spike_extra.append(f"--varch=vlen:{vlen},elen:{elen}")
         pk_extra = options.get("pk_extra_args")
         if pk_extra in [None, ""]:
             pk_extra = []
