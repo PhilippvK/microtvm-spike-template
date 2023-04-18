@@ -335,7 +335,7 @@ class Handler(server.ProjectAPIHandler):
             spike_extra = [spike_extra]
         vlen = int(options.get("vlen", VLEN))
         if vlen > 0:
-            elen = options.get("elen", ELEN)
+            elen = int(options.get("elen", ELEN))
             assert vlen >= 128, "VLEN has to be >= 128"
             assert elen in [32, 64], "ELEN has to be either 32 or 64"
             spike_extra.append(f"--varch=vlen:{vlen},elen:{elen}")
