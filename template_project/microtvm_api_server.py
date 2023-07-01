@@ -46,8 +46,8 @@ MODEL_LIBRARY_FORMAT_RELPATH = "model.tar"
 IS_TEMPLATE = not os.path.exists(os.path.join(PROJECT_DIR, MODEL_LIBRARY_FORMAT_RELPATH))
 
 # Used this size to pass most CRT tests in TVM.
-# WORKSPACE_SIZE_BYTES = 2 * 1024 * 1024
-WORKSPACE_SIZE_BYTES = 1 * 1024 * 1024
+WORKSPACE_SIZE_BYTES = 2 * 1024 * 1024
+# WORKSPACE_SIZE_BYTES = 1 * 1024 * 1024
 
 CMAKEFILE_FILENAME = "CMakeLists.txt"
 
@@ -333,6 +333,8 @@ class Handler(server.ProjectAPIHandler):
             spike_extra = []
         else:
             spike_extra = [spike_extra]
+        # spike_extra.append("-l")
+        # spike_extra.append("--misaligned")
         vlen = int(options.get("vlen", VLEN))
         if vlen > 0:
             elen = int(options.get("elen", ELEN))
@@ -344,10 +346,14 @@ class Handler(server.ProjectAPIHandler):
             pk_extra = []
         else:
             pk_extra = [pk_extra]
-        spike_args = [options.get("spike_exe"), f"--isa={isa}", *spike_extra, options.get("spike_pk"), *pk_extra]
-        self._proc = subprocess.Popen(
-            spike_args + [self.BUILD_TARGET], stdin=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=0
-        )
+        spike_args = [options.get("spike_exe"), f"--isa={isa}_zicntr_zihpm", *spike_extra, options.get("spike_pk"), *pk_extra]
+        print("spike_args", " ".join(spike_args))
+        input()
+        with open("/tmp/err.txt", "w+") as errfile:
+            self._proc = subprocess.Popen(
+                # spike_args + [self.BUILD_TARGET], stdin=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=0
+                spike_args + [self.BUILD_TARGET], stdin=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=0, stderr=errfile
+            )
         self._set_nonblock(self._proc.stdin.fileno())
         self._set_nonblock(self._proc.stdout.fileno())
         return server.TransportTimeouts(
@@ -412,7 +418,7 @@ class Handler(server.ProjectAPIHandler):
                 num_written = 0
 
             if not num_written:
-                self.disconnect_transport()
+                self.close_transport()
                 raise server.TransportClosedError()
 
             data = data[num_written:]

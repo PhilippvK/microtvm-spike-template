@@ -36,7 +36,7 @@
 #include <tvm/runtime/crt/graph_executor_module.h>
 #endif
 
-// #define DBG
+#define DBG
 #ifdef DBG
 FILE *fp;
 #define dbginit() fp = fopen("/tmp/test.txt", "w+");
@@ -89,17 +89,21 @@ int main(int argc, char** argv) {
 
   setbuf(stdin, NULL);
   setbuf(stdout, NULL);
+  dbginit();
+  dbgprintf("main\n");
   TVMLogf("microTVM SPIKE runtime - running");
 
-  dbginit();
   for (;;) {
+    dbgprintf("loop\n");
     uint8_t c;
     int ret_code = read(STDIN_FILENO, &c, 1);
     if (ret_code < 0) {
+      dbgprintf("read failed\n");
       TVMLogf("?Ret222?\n");
       perror("microTVM runtime: read failed");
       return 2;
     } else if (ret_code == 0) {
+      dbgprintf("zero\n");
       TVMLogf("?Ret22?\n");
       fprintf(stderr, "microTVM runtime: 0-length read, exiting!\n");
       return 2;
@@ -109,10 +113,13 @@ int main(int argc, char** argv) {
     uint8_t* cursor = &c;
     size_t bytes_to_process = 1;
     while (bytes_to_process > 0) {
+      dbgprintf("process\n");
       tvm_crt_error_t err = MicroTVMRpcServerLoop(rpc_server, &cursor, &bytes_to_process);
       if (err == kTvmErrorPlatformShutdown) {
+        dbgprintf("shutdown\n");
         break;
       } else if (err != kTvmErrorNoError) {
+        dbgprintf("err\n");
         char buf[1024];
         snprintf(buf, sizeof(buf), "microTVM runtime: MicroTVMRpcServerLoop error: %08x", err);
         TVMLogf("?Ret2?\n");
@@ -121,6 +128,7 @@ int main(int argc, char** argv) {
       }
     }
   }
+  dbgprintf("done\n");
   TVMLogf("?Done?\n");
   return 0;
 }
