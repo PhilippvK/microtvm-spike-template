@@ -362,6 +362,7 @@ class Handler(server.ProjectAPIHandler):
             proc = self._proc
             self._proc = None
             proc.terminate()
+            proc.kill()
             proc.wait()
 
     def _await_ready(self, rlist, wlist, timeout_sec=None, end_time=None):
