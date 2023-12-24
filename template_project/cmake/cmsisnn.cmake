@@ -1,0 +1,75 @@
+# SET(TOOLCHAIN "gcc" CACHE STRING "Specify which toolchain to use.")
+# IF(NOT CMSIS_PATH)
+#     MESSAGE(FATAL_ERROR "Missing value: CMSIS_DIR")
+# ENDIF()
+# SET(CMSIS_PATH ${CMSIS_DIR})
+
+IF(NOT CMSISNN_DIR)
+    MESSAGE(FATAL_ERROR "Missing value: CMSISNN_DIR")
+ENDIF()
+
+add_subdirectory(${CMSISNN_DIR} cmsisnn)
+
+# SET(CMSISNN_INCLUDE_DIRS
+#                          ${CMSISNN_DIR}
+#                          ${CMSISNN_DIR}/Include
+#                          ${CMSIS_DIR}/CMSIS/Core/Include
+#                          # ${CMSISNN_DIR}/CMSIS/NN/Include
+#                          # ${CMSISNN_DIR}/CMSIS/DSP/Include
+# )
+#
+# separate_arguments(ARGS UNIX_COMMAND "${ARGS}")
+#
+# INCLUDE(ExternalProject)
+# EXTERNALPROJECT_ADD(
+#     cmsisnn
+#     PREFIX cmsisnn
+#     # SOURCE_DIR ${CMSISNN_DIR}/CMSIS/NN/
+#     SOURCE_DIR ${CMSISNN_DIR}/
+#     CMAKE_ARGS -DCMAKE_BUILD_TYPE:STRING=${CMAKE_BUILD_TYPE}
+#                -DCMSIS_PATH=${CMSIS_DIR}
+#                ${ARGS}
+#     BUILD_COMMAND "${CMAKE_COMMAND}" --build . -j ${SUBPROJECT_THREADS}
+#     INSTALL_COMMAND ""
+# )
+#
+# EXTERNALPROJECT_GET_PROPERTY(cmsisnn BINARY_DIR)
+# SET(CMSISNN_LIB ${BINARY_DIR}/libcmsis-nn.a)
+#
+# # TFLite integration
+# IF(TFLM_OPTIMIZED_KERNEL_LIB)
+#     LIST(APPEND TFLM_OPTIMIZED_KERNEL_LIB ${CMSISNN_LIB})
+# ELSE()
+#     SET(TFLM_OPTIMIZED_KERNEL_LIB ${CMSISNN_LIB})
+# ENDIF()
+#
+# IF(TFLM_OPTIMIZED_KERNEL_INCLUDE_DIR)
+#     LIST(APPEND TFLM_OPTIMIZED_KERNEL_INCLUDE_DIR ${CMSISNN_INCLUDE_DIRS})
+# ELSE()
+#     SET(TFLM_OPTIMIZED_KERNEL_INCLUDE_DIR ${CMSISNN_INCLUDE_DIRS})
+# ENDIF()
+#
+# IF(TFLM_OPTIMIZED_KERNEL_DEPS)
+#     LIST(APPEND TFLM_OPTIMIZED_KERNEL_DEPS cmsisnn)
+# ELSE()
+#     SET(TFLM_OPTIMIZED_KERNEL_DEPS cmsisnn)
+# ENDIF()
+#
+# # TVM integration
+# IF(TVM_EXTRA_LIBS)
+#     LIST(APPEND TVM_EXTRA_LIBS ${CMSISNN_LIB})
+# ELSE()
+#     SET(TVM_EXTRA_LIBS ${CMSISNN_LIB})
+# ENDIF()
+#
+# IF(TVM_EXTRA_INCS)
+#     LIST(APPEND TVM_EXTRA_INCS ${CMSISNN_INCLUDE_DIRS})
+# ELSE()
+#     SET(TVM_EXTRA_INCS ${CMSISNN_INCLUDE_DIRS})
+# ENDIF()
+#
+# IF(TVM_EXTRA_DEPS)
+#     LIST(APPEND TVM_EXTRA_DEPS cmsisnn)
+# ELSE()
+#     SET(TVM_EXTRA_DEPS cmsisnn)
+# ENDIF()

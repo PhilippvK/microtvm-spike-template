@@ -298,6 +298,8 @@ class Handler(server.ProjectAPIHandler):
         debug = options.get("debug", False)
         build_type = "Debug" if debug else "Release"
         cmake_args.append(f"-DCMAKE_BUILD_TYPE={build_type}")
+        cmake_args.append("-DCMSIS_PATH=/work/git/mlonmcu/mlonmcu/workspace_staging/deps/src/cmsis")
+        cmake_args.append("-DCMSISNN_DIR=/work/git/mlonmcu/mlonmcu/workspace_staging/deps/src/cmsisnn")
         cmake_args.append("-DTOOLCHAIN=" + options.get("toolchain", TOOLCHAIN))
         llvm_dir = options.get("llvm_dir", None)
         if llvm_dir:
